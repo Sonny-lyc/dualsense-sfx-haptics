@@ -1,13 +1,18 @@
 cmake_minimum_required(VERSION 3.15)
-project(fmod_probe CXX)
+project(fmod_probe CXX ASM_MASM)
 
 # 必须 64 位（只狼是 x64，fmodex64.dll 也是 x64）
-add_library(fmodex64 SHARED dllmain.cpp)
+# thunks.asm: 360 个 jmp 跳转桩（自动生成），导出修饰名直接 jmp 到原函数
+# haptic_out.cpp: WASAPI 写 DualSense ch3/4 触觉音圈
+add_library(fmodex64 SHARED dllmain.cpp thunks.asm haptic_out.cpp)
 
 # 输出文件名固定为 fmodex64.dll
 set_target_properties(fmodex64 PROPERTIES
     OUTPUT_NAME "fmodex64"
     PREFIX "")
+
+# WASAPI 触觉输出需要的库
+target_link_libraries(fmodex64 PRIVATE ole32 avrt)
 
 # 用 .def 控制导出：706 个转发 + 3 个拦截
 target_link_options(fmodex64 PRIVATE

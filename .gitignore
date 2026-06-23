@@ -40,3 +40,8 @@ build/
 
 # 临时导出表（可由脚本重新生成）
 src/_fmod_exports.txt
+
+# native 调试/产物
+*.exe
+build_err.log
+enum_out.txt
