@@ -1,0 +1,41 @@
+{
+  "game": "Sekiro: Shadows Die Twice",
+  "engine": "fmod_ex",
+  "dll": "fmodex64.dll",
+
+  "_note": [
+    "只狼专属配置。core/ 与 engines/ 不应硬编码这些规则。",
+    "理想终态:engines/fmod_ex/dllmain.cpp 的 classify() 改为读取本文件;",
+    "当前 classify()/verdict 仍硬编码在 dllmain.cpp(line ~89),待开发机接线。",
+    ".def 和 thunks.* 是从【只狼这份 dll】生成的,换游戏需用导出解析脚本重新生成。"
+  ],
+
+  "bankClassification": {
+    "skip_voice":  { "rule": "basename 以 'vm' 开头",          "reason": "地图对白/语音" },
+    "skip_music":  { "rule": "basename 以 'sm' + 数字 开头",   "reason": "地图 BGM。注意 smain.fsb 不是音乐(sm 后是字母 a)" },
+    "vibrate":     { "rule": "其余一律震动",                    "reason": "smain/c####/rm## 等音效,含 unknown 子声音" }
+  },
+
+  "soundIdMap": {
+    "_status": "未接线。需补 hook getSubSound(index,&sub) 才能在运行时拿到 index",
+    "670-673": "格挡/弹刀",
+    "401-402": "水月反击",
+    "411":     "架势破碎",
+    "408":     "危险攻击蓄力",
+    "487-664": "脚步",
+    "983-992": "受伤/死亡"
+  },
+
+  "hapticPresets": {
+    "_status": "目标参数。合成器(core)待实现;数值参考下方 referenceMeasurements",
+    "parry":        { "type": "impact", "carrierHz": 180, "attackMs": 0.5, "decayTauMs": 12, "note": "锐(待 AC 实测校准,目前是估值)" },
+    "postureBreak": { "type": "impact", "carrierHz": 60,  "attackMs": 5,   "decayTauMs": 45, "note": "厚重" },
+    "hit":          { "type": "impact", "carrierHz": 110, "attackMs": 2,   "decayTauMs": 30, "note": "闷" }
+  },
+
+  "referenceMeasurements": {
+    "_note": "来自真实游戏 haptic 录屏分析(tools 的 analyze_haptic.py),用来校准上面的预设",
+    "fc26_pass":  { "carrierHz": 94, "attackMs": 3.2, "decayTauMs": 18, "character": "脆/一推/单脉冲" },
+    "tlou2_claw": { "carrierHz": 45, "durationMs": 280, "character": "深/暴力/持续撕扯型" }
+  }
+}
