@@ -528,3 +528,59 @@ FMOD 探针(已有) → 捕获"只含音效"的 PCM → WASAPI 写入 DualSense 
 
 **记录时间**: 2026-06-23  
 **当前阶段**: ✅ 细腻触觉（音频→ch3/4）实战可用 → 调参 & 减少音乐漏入
+
+---
+---
+
+# 📋 研发日志 — 2026-06-24：平台化目录重构（分支 `refactor/platform-structure`）
+
+> 把 `src/native` 从单一 `fmod_probe/` 拆成"平台分层",为"一个平台、多个游戏"做准备。只狼成为第一个 game profile。
+> ⚠️ **本次改动在分支上、未编译验证**（做改动的机器无 MSVC/cmake）。需在开发机 build 通过后再合并 master。
+
+## 🎯 动机
+项目目标是**平台**（只狼只是其中一个游戏）。原来所有东西挤在 `fmod_probe/` 一个文件夹、且只狼专属逻辑（`classify()` 的 sm/vm 规则、从只狼 dll 生成的 `.def`/`thunks`）和通用框架混在一起。重构把三类东西分开。
+
+## 📁 新结构
+```
+src/native/
+├── CMakeLists.txt        顶层构建（原在 fmod_probe/，已上移并重写）
+├── core/                 公用框架（引擎/游戏无关）
+│   ├── haptic_out.cpp/.h   WASAPI → DualSense ch3/4 触觉输出
+├── engines/fmod_ex/      FMOD Ex 引擎适配（所有 FMOD Ex 游戏共用）
+│   ├── dllmain.cpp         hook 逻辑（detour + thunk 填充 + DSP 捕获）
+│   └── README.md           部署说明
+├── games/sekiro/         ★只狼专属★
+│   ├── fmodex64.def        从只狼 dll 生成的导出别名表
+│   ├── fmodex64.def.orig.bak
+│   ├── thunks.asm          706 个 jmp 桩（从只狼 dll 生成）
+│   ├── thunks_gen.h        桩序号表
+│   └── profile.json        ✨新：bank 分类规则 / sound-id 映射 / haptic 预设 / 参考实测
+└── tools/haptic_test/    开发工具（enum / play34）
+```
+
+## 🔧 怎么做到"不改 C++ 源码"
+- 文件全部用 `git mv`（git 识别为 rename，历史可 `--follow` 追溯）。
+- CMake 用 `target_include_directories(... core games/sekiro)`，让 `dllmain.cpp` 里的
+  `#include "haptic_out.h"` / `#include "thunks_gen.h"` **不改路径**就能找到。
+- `add_library` 源路径 + `/DEF:` 路径指向新位置。
+
+## ✨ profile.json：把只狼的"脑子"抽成数据
+- `bankClassification`：sm+数字=音乐、vm=语音、其余=震动（即现在 `classify()` 的规则）。
+- `soundIdMap`：670-673=格挡 等（未接线，需 hook getSubSound）。
+- `hapticPresets`：弹刀/破防/受击的载波/起音/衰减（目标值）。
+- `referenceMeasurements`：FC26 传球=94Hz、美末2 被抓=45Hz（真实录屏 analyze 得来，用于校准预设）。
+
+## ⏭️ 待开发机做
+- [ ] **编译验证**：`cd src/native && cmake -B build -A x64 && cmake --build build --config Release`。编过即合并 master。
+- [ ] 编不过（多半是 CMake 路径）→ 反馈报错即可快速修。
+- [ ] **接线**：让 `classify()` 改读 `games/sekiro/profile.json`（需在 C++ 加 JSON 解析）。接完，适配新游戏才真正"不碰 C++"。
+
+## 📌 注（给 review 的人）
+- 本次**只动结构 + 加 profile.json + 改文档**，**未改任何 hook/触觉逻辑**。功能行为应与 `a019918` 一致。
+- 游戏录屏(wav)和分析图(png)等素材**刻意未提交**（零游戏文件原则）。
+- 分析工具 `analyze_haptic.py` / `haptic_synth.py` 暂未纳入仓库（如需可放 `tools/`）。
+
+---
+
+**记录时间**: 2026-06-24  
+**当前阶段**: 🔄 平台化重构在分支上,待开发机编译验证 → 合并 master

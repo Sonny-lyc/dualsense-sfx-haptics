@@ -94,7 +94,7 @@ Sony DualSense 手柄的触觉马达上。
 - DualSense 手柄检测 + 基础震动控制（Electron + node-hid）
 - 《只狼》音频引擎调研：确认 FMOD Ex，导出表实测解析（709 导出，C++ API，4.x 世代）
 - bank 分类表（音乐/语音/音效）确认
-- **FMOD 代理探针**（`src/native/fmod_probe/`）：记录每个声音来源 bank 的只读观测工具
+- **FMOD 代理探针 + 触觉输出**（`src/native/`，平台化分层）：hook FMOD 记录 bank + 驱动 ch3/4 触觉
 
 - **探针已编译、部署并验证可被 `fmod_event64.dll` 正常加载**（2026-06-22）：
   代理 `fmodex64.dll` 共 **709 个导出**（706 个 **jmp 跳转桩** + 3 个拦截 detour，与原 dll 数量一致、完全透明）。
@@ -127,9 +127,26 @@ Sony DualSense 手柄的触觉马达上。
 
 ---
 
+## 📂 代码结构（平台化，2026-06-24 重构）
+
+本工具按"平台"分层,**只狼只是第一个适配的游戏**:
+
+```
+src/native/
+├── core/              公用框架(引擎/游戏无关): haptic_out 触觉输出(WASAPI → ch3/4)
+├── engines/fmod_ex/   FMOD Ex 引擎适配(所有 FMOD Ex 游戏共用): dllmain hook 逻辑
+├── games/sekiro/      只狼专属: .def/thunks(从只狼 dll 生成) + profile.json(分类规则/sound-id/预设)
+└── tools/haptic_test/ 开发工具(不进产品): enum/play34
+```
+
+> **加新游戏 ≈ 加一个 `games/<game>/` 文件夹**(它的 `.def`/`thunks`/`profile.json`),`core`/`engines` 不动。
+> 注:`classify()` 目前仍硬编码在 `dllmain.cpp`,`profile.json` 是数据形态,"读 profile 替代硬编码"待接线。
+
+---
+
 ## 🔬 探针：第一步要回答的问题
 
-部署见 [`src/native/fmod_probe/README.md`](src/native/fmod_probe/README.md)。跑一局后看
+部署见 [`src/native/engines/fmod_ex/README.md`](src/native/engines/fmod_ex/README.md)。跑一局后看
 `%USERPROFILE%\Desktop\fmod_probe_log.txt`，确认：
 
 - [ ] 战斗音（格挡/受伤）是否走 `playSound`、归在 `smain.fsb` / `c####.fsb`
