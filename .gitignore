@@ -50,3 +50,7 @@ enum_out.txt
 src/native/haptic_test/*.wav
 src/native/haptic_test/*.exe
 src/native/haptic_test/*.obj
+
+# C# GUI 编译产物
+src/gui/bin/
+src/gui/obj/
