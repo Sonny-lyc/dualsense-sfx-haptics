@@ -23,4 +23,9 @@
     </Content>
   </ItemGroup>
 
+  <!-- PublishSingleFile 会丢 Content,故 publish 后显式拷贝代理 DLL 到 proxy\ -->
+  <Target Name="CopyProxyOnPublish" AfterTargets="Publish" Condition="Exists('..\..\build\Release\fmodex64.dll')">
+    <Copy SourceFiles="..\..\build\Release\fmodex64.dll" DestinationFolder="$(PublishDir)proxy" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

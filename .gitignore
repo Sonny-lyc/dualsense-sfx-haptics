@@ -54,3 +54,6 @@ src/native/haptic_test/*.obj
 # C# GUI 编译产物
 src/gui/bin/
 src/gui/obj/
+
+# 发布产物(大二进制,走 Release 资产,不入库)
+/dist/

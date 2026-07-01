@@ -332,8 +332,9 @@ public class MainForm : Form
                         cands.Add(Path.Combine(m.Groups[1].Value.Replace(@"\\", @"\"), "steamapps", "common", "Sekiro"));
             }
         } catch { }
-        cands.Add(@"E:\SteamLibrary\steamapps\common\Sekiro");
         cands.Add(@"C:\Program Files (x86)\Steam\steamapps\common\Sekiro");
+        foreach (var drive in DriveInfo.GetDrives())
+            try { if (drive.IsReady) cands.Add(Path.Combine(drive.Name, "SteamLibrary", "steamapps", "common", "Sekiro")); } catch { }
         foreach (var c in cands)
             try { if (File.Exists(Path.Combine(c, "sekiro.exe"))) return c; } catch { }
         return null;
