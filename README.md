@@ -120,10 +120,14 @@
 
 游戏目录里有真正的 `fmodex64.dll`。本工具放一个**同名代理 DLL**：把 700+ 个导出原样转发给真引擎（游戏无感），
 只拦几个关键函数，用 `getSubSound` 记录**每个声音在 bank 里的编号**，playSound 时反查 →
-在白名单（弹刀/命中/闪避…）命中时，把那一瞬的游戏主音频喂给 DualSense 的 ch3/4 触觉音圈。
-**不解密、不分离、不改游戏行为，纯只读观测 + 触觉输出。**
+在白名单（弹刀/命中/闪避…）命中时，**给那个音效自己的通道单独挂一个透明 DSP**，
+只抓**这一路纯净的音效**（不含并发的音乐/危攻），做触觉整形（高通取瞬态 + 包络）后喂给 DualSense 的 ch3/4 触觉音圈。
 
-技术细节与研发历程见 [`PROJECT_CHANGES.md`](PROJECT_CHANGES.md)。
+**逐通道隔离**是 v0.2 的关键升级：早期"喂 master 混音"会把并发音混在一起（如危攻盖住识破）；
+现在每个音效**各抓各的通道**，天然不漏音乐、也不互相吞。**不解密、不分离音频、不改游戏行为，纯只读观测 + 触觉输出。**
+
+触觉行为由 `%AppData%\DualSenseSfxHaptics\haptics.json` 配置（GUI 的"音效管理"面板可视化调）。
+技术实现细节见贡献者 [wanshuai12138 的实现说明](https://github.com/wanshuai12138/dualsense-sfx-haptics)；研发历程见 [`PROJECT_CHANGES.md`](PROJECT_CHANGES.md)。
 
 ---
 
@@ -153,6 +157,14 @@ dotnet publish src/gui/DualSenseHaptics.csproj -c Release -r win-x64 \
 - Sony DualSense 手柄（**USB 有线**）
 - Steam Input（把手柄当 Xbox 用）
 - 可选：VB-CABLE + DSX（走虚拟声卡那条路时）
+
+---
+
+## 🙏 致谢
+
+- **[wanshuai12138](https://github.com/wanshuai12138/dualsense-sfx-haptics)** —— 贡献了 v0.2 的核心引擎：
+  **逐通道透明 DSP 隔离**（每个音效抓自己的通道，稳定不崩、天然不漏音乐）、逐通道触觉整形、
+  每事件寿命、左右马达空间化、配置化系统。本项目的音频隔离难题因此得解。
 
 ---
 

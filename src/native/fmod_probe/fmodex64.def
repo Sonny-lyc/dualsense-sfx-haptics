@@ -435,7 +435,7 @@ EXPORTS
     FMOD_Channel_GetWaveData=thunk_429 @433
     FMOD_Channel_IsPlaying=thunk_430 @434
     FMOD_Channel_IsVirtual=thunk_431 @435
-    FMOD_Channel_Set3DAttributes=thunk_432 @436
+    FMOD_Channel_Set3DAttributes=channelSet3DAttributes_detour @436
     FMOD_Channel_Set3DConeOrientation=thunk_433 @437
     FMOD_Channel_Set3DConeSettings=thunk_434 @438
     FMOD_Channel_Set3DCustomRolloff=thunk_435 @439
@@ -455,13 +455,13 @@ EXPORTS
     FMOD_Channel_SetLowPassGain=thunk_449 @453
     FMOD_Channel_SetMode=thunk_450 @454
     FMOD_Channel_SetMute=thunk_451 @455
-    FMOD_Channel_SetPan=thunk_452 @456
+    FMOD_Channel_SetPan=channelSetPan_detour @456
     FMOD_Channel_SetPaused=thunk_453 @457
     FMOD_Channel_SetPosition=thunk_454 @458
     FMOD_Channel_SetPriority=thunk_455 @459
     FMOD_Channel_SetReverbProperties=thunk_456 @460
     FMOD_Channel_SetSpeakerLevels=thunk_457 @461
-    FMOD_Channel_SetSpeakerMix=thunk_458 @462
+    FMOD_Channel_SetSpeakerMix=channelSetSpeakerMix_detour @462
     FMOD_Channel_SetUserData=thunk_459 @463
     FMOD_Channel_SetVolume=thunk_460 @464
     FMOD_Channel_Stop=thunk_461 @465

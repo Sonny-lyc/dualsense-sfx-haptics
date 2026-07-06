@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "defaultGain": 1.0,
+  "dumpEnabled": false,
+  "useBuiltinDefaults": true,
+  "effects": {}
+}

@@ -2,7 +2,7 @@
 //   ① DualSense（>=4 声道）：独占模式、设备真实格式(16-bit)、写 ch3/4 触觉音圈。
 //   ② 虚拟声卡 CABLE（2 声道）：共享模式、float、写两声道 —— 喂给 DSX 的 Audio-to-Haptics。
 // 目标由桌面 haptic_target.txt 决定：内容是端点 ID("{...}.{...}")→按 ID 取；否则当名字子串匹配。
-// 渲染线程通过 haptic_pull_audio() 拉"音效真实波形"。
+// 渲染线程通过 haptic_pull_audio() 拉左右两路触觉波形。
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <mmdeviceapi.h>
@@ -20,8 +20,8 @@ static const PROPERTYKEY PK_DevFmt = { {0xf19f064d,0x082c,0x4e27,{0xbc,0x73,0x68
 static const double PI = 3.14159265358979;
 
 static volatile bool g_started = false;
-static const float HAP_GAIN  = 3.0f;     // 增益
-static const float HAP_LP_HZ = 700.0f;   // 低通截止；0=不低通
+static const float HAP_GAIN  = 1.6f;     // 输出端只做温和放大，主要手感由 DLL 内的触觉整形决定
+static const float HAP_LP_HZ = 1200.0f;  // 保留更多瞬态纹理，减少低频拖尾感；0=不低通
 
 static FILE* g_hlog = nullptr;
 static void hlog(const char* fmt, ...) {
@@ -121,21 +121,25 @@ static DWORD WINAPI render_thread(LPVOID) {
     hlog("started: exclusive=%d CH=%d bits=%d float=%d bufFrames=%u", (int)exclusive, CH, BITS, (int)isFloat, bufFrames);
 
     float lpK = (HAP_LP_HZ>0) ? (1.0f - expf(-2.0f*(float)PI*HAP_LP_HZ/pfmt->nSamplesPerSec)) : 1.0f;
-    float lp = 0; static float mono[8192];
+    float lpL = 0, lpR = 0; static float hapL[8192], hapR[8192];
 
     while (g_started) {
         if (WaitForSingleObject(evt, 1000) != WAIT_OBJECT_0) continue;
         UINT32 pad=0; ac->GetCurrentPadding(&pad);
         UINT32 avail = bufFrames - pad; if (!avail) continue;
         if (FAILED(rc->GetBuffer(avail,&p))) break;
-        int got = haptic_pull_audio(mono, (int)avail);
+        int got = haptic_pull_audio(hapL, hapR, (int)avail);
         for (UINT32 i=0;i<avail;i++) {
-            float x = got ? mono[i] : 0.0f;
-            lp += (x - lp)*lpK;                          // 低通
-            float y = lp * HAP_GAIN; if (y>1) y=1; if (y<-1) y=-1;
+            float xL = got ? hapL[i] : 0.0f;
+            float xR = got ? hapR[i] : 0.0f;
+            lpL += (xL - lpL)*lpK;                       // 低通
+            lpR += (xR - lpR)*lpK;
+            float yL = lpL * HAP_GAIN; if (yL>1) yL=1; if (yL<-1) yL=-1;
+            float yR = lpR * HAP_GAIN; if (yR>1) yR=1; if (yR<-1) yR=-1;
             for (int c=0;c<CH;c++) {
                 bool hapCh = (CH>=4) ? (c==2||c==3) : true;   // 4声道→ch3/4；否则两声道都写
-                float s = hapCh ? y : 0.0f;
+                float s = 0.0f;
+                if (hapCh) s = (CH>=4) ? (c==2 ? yL : yR) : (c==0 ? yL : yR);
                 if (isFloat) ((float*)p)[i*CH+c] = s;
                 else         ((short*)p)[i*CH+c] = (short)(s*32767.0f);
             }

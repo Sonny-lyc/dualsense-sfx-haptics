@@ -57,3 +57,10 @@ src/gui/obj/
 
 # 发布产物(大二进制,走 Release 资产,不入库)
 /dist/
+
+# 游戏派生音频 / dump 产物：严禁入库(零游戏文件 + 版权红线)
+已捕获到的音频/
+**/dumps/
+dumps/
+seen_effects.jsonl
+*.wav
