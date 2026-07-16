@@ -80,6 +80,7 @@ static std::unordered_map<void*, int> g_subIndex;
 static std::unordered_map<void*, std::string> g_subBank;
 static std::mutex g_lock;
 static FILE* g_log = nullptr;
+static ULONGLONG g_startTick = 0;   // do_init() 打开日志后赋值，logf() 的时间戳相对这个起点
 
 // 子声音 index → 含义（自测 + 研究资料，对本版 smain 系 bank 有效）
 static const char* sound_meaning(int idx) {
@@ -88,16 +89,24 @@ static const char* sound_meaning(int idx) {
     if (idx >= 983 && idx <= 992) return "受伤/死亡";          // 实测确认
     if (idx >= 851 && idx <= 853) return "处决/破防duang";     // 自测：853每次处决刷一次(3处决→3,2处决→2)
     if (idx >= 256 && idx <= 258) return "布料/剧烈移动(闪避)"; // 自测:只在闪避/挥刀/战斗响,轻走路不响(走路0次,闪避10次)→闪避靠它
-    if (idx == 428 || idx == 435 || idx == 438 || idx == 444 || idx == 456) return "UI/菜单音"; // 自测:标题/佛雕菜单导航
+    if (idx == 428 || idx == 435 || idx == 444 || idx == 456) return "UI/菜单音"; // 自测:标题/佛雕菜单导航
+    if (idx == 427) return "UI音";                             // 2026-07-13 按键打点实测确认
+    if (idx == 459) return "地名咚/到达";                       // 2026-07-13 按键打点实测确认，取代旧的 1031/1032
+    if (idx == 439) return "UI音(打点确认)";                    // 2026-07-13 mark:Δ281ms
+    if (idx == 438) return "UI/菜单音?(证据矛盾,禁震中)";        // 2026-07-13 疑似混了加载静音,待专项复测
     if (idx == 353 || idx == 354) return "濒死心跳";          // 自测:濒死状态扑通两下反复
     if (idx >= 33  && idx <= 35)  return "归佛/传送";          // 自测:佛雕点传送(smain_jaj)
     if (idx >= 57  && idx <= 59)  return "死字咚/死亡屏幕";    // 自测:死亡时(smain_jaj)
-    if (idx == 1031|| idx == 1032) return "地名咚/到达";       // 自测:到新地点
+    if (idx == 1031|| idx == 1032) return "加载画面标记(误标定,已禁震)"; // 2026-07-13 按键打点证伪，不是地名
     if (idx >= 60  && idx <= 64)  return "脚步(通用)";         // 自测:所有地面每步都刷(太频繁,不收)
     if (idx >= 579 && idx <= 582) return "木质脚步";           // 自测:木板脚步(曾误认为闪避)
     if (idx >= 629 && idx <= 632) return "雪地脚步";           // 自测:雪地脚步
-    if (idx == 330 || idx == 331 || idx == 641) return "不死斩挥刀"; // 自测：每挥一次刷一次
-    if (idx >= 401 && idx <= 402) return "水月反击";           // 研究资料(待实测)
+    if (idx == 330 || idx == 331) return "不死斩挥刀";          // 自测：每挥一次刷一次
+    if (idx == 641) return "?(曾误归不死斩,已摘除待查)";        // 2026-07-13 清水寺(木头地)测出，用户确认当时是普通挥刀非不死斩技能，先禁震
+    if (idx >= 476 && idx <= 486) return "石头脚步";             // 2026-07-13 实测确认是脚步不是突刺，不收
+    if (idx == 1033 || idx == 1034) return "休息循环音(实测确认,不要震)"; // 2026-07-13 mark 三连确认是坐着休息时的循环环境音，用户反馈无心跳感，不加
+    if (idx >= 1028 && idx <= 1030) return "首次坐佛候选(测试中)"; // 2026-07-13 只在"第一次坐佛"那次窗口出现，测试是否该震
+    if (idx >= 401 && idx <= 402) return "水月反击(识破)";      // 2026-07-16 mark 打点两次确认(Δ15ms/453ms)
     return "?";
 }
 
@@ -107,12 +116,20 @@ static const char* sound_group_key(int idx) {
     if (idx >= 983 && idx <= 992) return "hurt_death";
     if (idx >= 851 && idx <= 853) return "deathblow_break";
     if (idx >= 256 && idx <= 258) return "dodge_cloth";
-    if (idx == 330 || idx == 331 || idx == 641) return "mortal_draw";
-    if (idx == 428 || idx == 435 || idx == 438 || idx == 444 || idx == 456) return "ui_menu";
+    if (idx == 330 || idx == 331) return "mortal_draw";
+    if (idx == 641) return "unknown_disabled_test";
+    if (idx >= 476 && idx <= 486) return "footstep_stone";
+    if (idx == 1033 || idx == 1034) return "rest_loop_confirmed_off";
+    if (idx >= 1028 && idx <= 1030) return "first_sit_candidate_test";
+    if (idx == 428 || idx == 435 || idx == 444 || idx == 456) return "ui_menu";
+    if (idx == 427) return "ui_menu";
+    if (idx == 439) return "ui_menu";
+    if (idx == 438) return "ui_menu_disputed";
+    if (idx == 459) return "area_title";
     if (idx == 353 || idx == 354) return "low_hp_heartbeat";
     if (idx >= 33  && idx <= 35)  return "travel_buddha";
     if (idx >= 57  && idx <= 59)  return "death_screen";
-    if (idx == 1031 || idx == 1032) return "area_title";
+    if (idx == 1031 || idx == 1032) return "loading_marker_disabled";
     if (idx >= 60  && idx <= 64)  return "footstep_common";
     if (idx >= 579 && idx <= 582) return "footstep_wood";
     if (idx >= 629 && idx <= 632) return "footstep_snow";
@@ -130,13 +147,37 @@ static bool is_haptic_event(int idx) {
     if (idx >= 983 && idx <= 992) return true;   // 受伤/死亡
     if (idx >= 851 && idx <= 853) return true;   // 处决/破防 duang
     if (idx >= 256 && idx <= 258) return true;   // 布料/剧烈移动=闪避信号(轻走路不响,只在闪避/挥刀/战斗响)
-    if (idx == 330 || idx == 331 || idx == 641) return true;  // 不死斩挥刀
+    if (idx == 330 || idx == 331) return true;   // 不死斩挥刀
+    // 2026-07-16 mark 打点两次确认(识破/Mikiri Counter，Δ15ms/453ms)，加入白名单。
+    if (idx >= 401 && idx <= 402) return true;   // 水月反击(识破)
+    // 2026-07-13 641 曾误归"不死斩"，用户确认清水寺(木头地)那次其实是普通挥刀，
+    // 跟真正的不死斩(石头地=330/331)对不上，先摘掉，具体是什么待查。
+    if (idx == 641) return false;
+    // 2026-07-13 476-486 测试结果：用户确认这是石头地脚步(不是突刺)，跟 60-64/579-582/629-632
+    // 一样属于"地面脚步"大类，故意不收，禁震。
+    if (idx >= 476 && idx <= 486) return false;
+    // 1033/1034：mark 三连确认是休息循环音，用户反馈没有心跳感，明确不要，禁震。
+    if (idx == 1033 || idx == 1034) return false;
+    // 1028-1030：只在"第一次坐佛"窗口出现过一次，测试是否该震。
+    if (idx >= 1028 && idx <= 1030) return true;
     // 新增 UI/系统事件(均实测游戏内几乎不出现,误触发0-2次):
-    if (idx == 428 || idx == 435 || idx == 438 || idx == 444 || idx == 456) return true; // 菜单/标题/选项 UI 音
+    if (idx == 428 || idx == 435 || idx == 444 || idx == 456) return true; // 菜单/标题/选项 UI 音
+    // 2026-07-13 按键打点实测确认(见 MARK 时间戳分析，已实机验证手感)：
+    if (idx == 427) return true;   // UI 音
+    if (idx == 459) return true;   // 真地名"咚"，取代旧的 1031/1032
+    if (idx == 439) return true;   // UI 音，mark 命中 Δ281ms
+    // 438 证据矛盾，先禁震（宁可漏震不要误震）：
+    // - mark1/mark2(65.641/69.922) 精确对上 438(Δ125ms/188ms)，禁震后用户感觉"少了个UI音"；
+    // - 但 [78.875] 那次 438 明确出现在传送(76.797)后的加载静音窗口内(80.563才开始新区域CSI)，
+    //   跟 1031/1032 当初的加载标记是同一模式；且 438 在无传送时也每隔几秒自己触发，频率偏高。
+    // 待下次单独测试：远离任何传送/加载，专门在菜单里点选几次、只标记那种场景，才能分清
+    // 438 是不是混了"真UI点击"和"加载静音"两种场景。
+    if (idx == 438) return false;
     if (idx == 353 || idx == 354) return true;   // 濒死心跳(扑通两下=353+354一对反复)
     if (idx >= 33 && idx <= 35)   return true;   // 归佛/佛雕点传送 stinger
     if (idx >= 57 && idx <= 59)   return true;   // "死"字屏幕咚/死亡 stinger
-    if (idx == 1031 || idx == 1032) return true; // 到新地点·地名"咚"/到达
+    // 2026-07-13 按键打点证伪：1031/1032 两次命中都对应"加载画面"而非真地名，误标定，已禁震。
+    if (idx == 1031 || idx == 1032) return false;
     // 注意：故意不收 60-64(通用脚步,走哪震哪太乱)、579-582/629-632(地面脚步)、174/1305/1306(不死斩血焰循环音)、
     //       xm11.fsb idx=0(区域环境音,一直响)、smain_jaj idx=7(该bank也含游戏内声音,故按具体idx收而非整bank)
     return false;
@@ -162,22 +203,32 @@ static const char* classify(const std::string& base) {
     return "VIBRATE";
 }
 
-static bool starts_with_ci(const std::string& s, const char* prefix) {
-    return s.size() >= strlen(prefix) && _strnicmp(s.c_str(), prefix, strlen(prefix)) == 0;
-}
-
-static bool is_default_haptic_bank(const std::string& bank) {
-    return starts_with_ci(bank, "smain") || starts_with_ci(bank, "main");
-}
-
 static void logf(const char* fmt, ...) {
     std::lock_guard<std::mutex> g(g_lock);
     if (!g_log) return;
+    ULONGLONG t = GetTickCount64() - g_startTick;
+    fprintf(g_log, "[%llu.%03llu] ", t / 1000, t % 1000);
     va_list ap; va_start(ap, fmt);
     vfprintf(g_log, fmt, ap);
     va_end(ap);
     fputc('\n', g_log);
     fflush(g_log);
+}
+
+// 按键打点：打点键按下瞬间写一行 MARK，和 PLAY/CHDSP 等事件共用同一套时间戳。
+// 用法：听到/看到目标事件（如地名"咚"）的瞬间立刻按打点键，回头翻日志，MARK 前后
+// 150-250ms（人的反应延迟量级）范围内的 PLAY 行就是候选 idx。
+// 打点键用方向键"↓"（VK_DOWN）——手柄玩游戏时键盘本来就空闲，不会跟游戏内任何绑定冲突。
+// 想换键改这里的 VK_DOWN 即可。
+static const int MARK_KEY = VK_DOWN;
+static DWORD WINAPI mark_key_thread(LPVOID) {
+    bool prevDown = false;
+    while (true) {
+        Sleep(20);
+        bool down = (GetAsyncKeyState(MARK_KEY) & 0x8000) != 0;
+        if (down && !prevDown) logf("MARK (down)");
+        prevDown = down;
+    }
 }
 
 struct EffectRule {
@@ -258,8 +309,8 @@ static void write_default_config_if_missing() {
         "{\n"
         "  \"enabled\": true,\n"
         "  \"defaultGain\": 1.0,\n"
-        "  \"dumpEnabled\": false,\n"
-        "  \"useBuiltinDefaults\": true,\n"
+        "  \"dumpEnabled\": true,\n"
+        "  \"useBuiltinDefaults\": false,\n"
         "  \"effects\": {}\n"
         "}\n";
     fwrite(text, 1, strlen(text), f);
@@ -375,7 +426,10 @@ static HapticDecision decide_haptic(int idx, const std::string& bank, bool bankA
     if (!bankAllowsHaptics) return d;
     std::lock_guard<std::mutex> lock(g_cfgLock);
     if (!g_cfg.enabled) return d;
-    bool enabled = g_cfg.useBuiltinDefaults && (is_default_haptic_bank(bank) || (bank == "(unknown)" && is_haptic_event(idx)));
+    // 2026-07-13：曾经是"smain/main 开头的 bank 直接播放=无脑震"，不管 idx。这条 bank 也混着
+    // 大量非战斗的场景/环境音（比如 idx=32，实测跑满4秒新上限、quiet 全程不掉、用户听不到对应
+    // 声音——大概率是环境音被误抓），改成跟 (unknown) 子声音一样过 idx 白名单，不再整 bank 通吃。
+    bool enabled = g_cfg.useBuiltinDefaults && is_haptic_event(idx);
     float gain = g_cfg.defaultGain;
     bool dump = g_cfg.dumpEnabled;
     auto it = idx >= 0 ? g_cfg.effects.find(idx) : g_cfg.effects.end();
@@ -729,11 +783,24 @@ static FMOD_RESULT dsp_read(FMOD_DSP_STATE_*, float* in, float* out, unsigned in
     return 0;  // FMOD_OK
 }
 
+// 2026-07-16 诊断：raw_bypass 测试显示"跳过整形反而更卡"，说明毛病大概率不在整形本身，
+// 在下游——这里两条独立时钟的音频流在拼接（FMOD 混音线程写 vs WASAPI 渲染线程按硬件缓冲区
+// 节奏读），"backlog 多了就跳过丢弃"(trim)和"读到 rd==wr 没数据"(欠载/starve)都可能造成
+// 周期性断层。统计这两类事件的频率和典型间隔，不在热路径里逐次打日志(会拖慢渲染线程自己)，
+// 攒够一批(~1s)才汇总输出一行。
+static std::atomic<unsigned> g_trimEvents{0};
+static std::atomic<unsigned long long> g_trimFramesTotal{0};
+static std::atomic<unsigned> g_starveCalls{0};   // 整次 pull 全程没读到任何数据
+static std::atomic<unsigned> g_starveSamples{0}; // 单个采样点没读到数据(局部欠载，got仍可能是1)
+static std::atomic<unsigned> g_pullCalls{0};
+
 // 由 haptic_out 渲染线程调用：从环形缓冲连续读 n 个单声道样本
 extern "C" int haptic_pull_audio(float* outL, float* outR, int n) {
     float gate = g_gate.load(std::memory_order_relaxed);
     int got = 0; float peak = 0;
     unsigned avail = 0;
+    unsigned localStarveSamples = 0;
+    bool trimmed = false; unsigned trimmedFrames = 0;
     {
         std::lock_guard<std::mutex> lock(g_ringLock);
         unsigned wr = g_wr.load(std::memory_order_acquire);
@@ -744,6 +811,7 @@ extern "C" int haptic_pull_audio(float* outL, float* outR, int n) {
         // 太小会欠载爆音/断音；触觉对 glitch 较宽容，可从此值(3)往下调。
         unsigned target = 3u * (unsigned)n;
         if (avail > target) {
+            trimmed = true; trimmedFrames = avail - target;
             unsigned newRd = wr - target;
             clear_mix_range(rd, newRd);
             rd = newRd;
@@ -757,6 +825,8 @@ extern "C" int haptic_pull_audio(float* outL, float* outR, int n) {
                 clear_mix_slot(rd);
                 ++rd;
                 got = 1;
+            } else {
+                ++localStarveSamples;
             }
             gate *= GATE_DK;
             if (gate < 0.0001f) gate = 0.0f;
@@ -769,11 +839,17 @@ extern "C" int haptic_pull_audio(float* outL, float* outR, int n) {
         g_rd.store(rd, std::memory_order_relaxed);
     }
     g_gate.store(gate, std::memory_order_relaxed);
-    // 诊断：每约 300 次（~3s）报一次消费端
-    static std::atomic<int> pc{0}; static float pmax = 0; static unsigned amax = 0;
-    if (peak > pmax) pmax = peak; if (avail > amax) amax = avail;
-    // PULL 刷屏日志已关闭(每帧写会独占锁死文件+刷爆日志)。需要诊断时再开。
-    (void)pc; (void)pmax; (void)amax;
+
+    if (trimmed) { g_trimEvents.fetch_add(1, std::memory_order_relaxed); g_trimFramesTotal.fetch_add(trimmedFrames, std::memory_order_relaxed); }
+    if (localStarveSamples > 0) {
+        g_starveSamples.fetch_add(localStarveSamples, std::memory_order_relaxed);
+        if (!got) g_starveCalls.fetch_add(1, std::memory_order_relaxed);
+    }
+    unsigned calls = g_pullCalls.fetch_add(1, std::memory_order_relaxed) + 1;
+    if (calls % 200 == 0) { // 攒够约 200 次 pull（低延迟设备下大约 1-2 秒）汇总一次
+        logf("PULLSTAT: calls=%u trims=%u trimFrames=%llu starveCalls=%u starveSamples=%u avail=%u n=%d",
+             calls, g_trimEvents.load(), g_trimFramesTotal.load(), g_starveCalls.load(), g_starveSamples.load(), avail, n);
+    }
     return (got && peak >= 0.004f) ? 1 : 0;
 }
 
@@ -795,17 +871,72 @@ struct DspContext {
     float hpPrevIn;
     float hpPrevOut;
     float env;
+    unsigned long long channelGen; // 挂 tap 那一刻的"这个 channel 属于第几次 playSound"
+    float bpPrev; // 带通：hp 再过一级低通后的状态，限制在音圈敏感区(~300Hz以下)
 };
 
 static std::unordered_map<void*, DspContext> g_dspContext;
 
-static const unsigned HAPTIC_FALLBACK_MAX_FRAMES = 48000 / 4; // 250ms：未知事件默认短促
+// 换音检测："channel 被 FMOD 回收复用去播别的声音"这件事本身，playSound_detour 每次都
+// 100%会经过（不管新声音在不在白名单里），所以在这里给每个 channel 指针记一个单调递增的代数、
+// 每次 playSound 成功拿到 channel 就+1。channel_tap_read 只要发现自己挂 tap 时记的代数和
+// "现在这个 channel 最新代数"对不上，就说明这个 channel 已经被派去播别的声音了，该收手。
+// 全程只读写我们自己的 map，不调用任何 FMOD API、不摘 DSP 节点，纯是"要不要继续往环形
+// 缓冲写数据"的判断，和 maxFrames/静音检测是同一层，不涉及跨线程操作 FMOD 内部结构。
+static std::mutex g_chanGenLock;
+static std::unordered_map<void*, unsigned long long> g_chanGen;
+static std::atomic<unsigned long long> g_chanGenNext{1};
+
+static unsigned long long bump_channel_gen(void* channel) {
+    unsigned long long g = g_chanGenNext.fetch_add(1, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(g_chanGenLock);
+    g_chanGen[channel] = g;
+    return g;
+}
+static unsigned long long current_channel_gen(void* channel) {
+    std::lock_guard<std::mutex> lock(g_chanGenLock);
+    auto it = g_chanGen.find(channel);
+    return it != g_chanGen.end() ? it->second : 0;
+}
+
+// 2026-07-13：现在有了 channel 换音检测(current_channel_gen)兜底真正的"该收尾了"信号，
+// 这个兜底上限只是防真出现"白名单混了循环音"的极端保险，不再需要卡得很短——
+// 没专门配置寿命的事件，默认给够长(4s)，真正什么时候停交给"换音"或"静音"两个信号判断。
+static const unsigned HAPTIC_FALLBACK_MAX_FRAMES = 48000 * 4; // 4s：默认足够长，换音/静音检测负责及时收尾
 static const unsigned HAPTIC_QUIET_FRAMES = 48000 / 40;       // 25ms 低电平后停止
 static const float HAPTIC_QUIET_PEAK = 0.010f;
 static const float HAPTIC_HP_A = 0.985f;       // 约 115Hz 高通，削掉持续嗡嗡的低频拖尾
-static const float HAPTIC_ENV_ATTACK = 0.45f;  // 快速抓瞬态
-static const float HAPTIC_ENV_DECAY = 0.965f;  // 快速回落，避免傻震
-static const float HAPTIC_TRANSIENT_GAIN = 1.65f;
+// 2026-07-13：频段下移(07-13 Interhaptics对比文档②)。高通之后原来直接乘增益输出，
+// 保留了完整的高频摆动——DualSense 音圈只对 ~50-300Hz 敏感，摆动里 300Hz 以上的部分
+// 音圈感受不到，只贡献"多次过零"，摸起来就是长音效上的"一下一下"碎震，不是连续推力。
+// 加一级低通把 hp 限制在 300Hz 以下，让它变成真正的"带通"信号，参与整形的就只剩音圈
+// 摸得到的那部分。系数公式：1-exp(-2*pi*截止频率/采样率)，48kHz下 300Hz ≈ 0.0385
+// （同款算法见 haptic_out.cpp 的 lpK）。
+static const float HAPTIC_BP_LP_A = 0.0385f;   // 带通低通级，截止约 300Hz
+
+// 2026-07-13 实测两轮发现：短促打击类(弹刀/危攻/处决/受伤/不死斩/闪避)和长音效(坐佛/UI等)
+// 对整形的需求正好相反，不能用同一套全局参数：
+//  - 短促类：要清脆的"这一下"，hp(带通后的原始波形边缘)该占大头，起震/回落都要快，
+//    连续几下(连击/连续弹刀)之间不能糊在一起；弹刀的金属高频被带通滤掉了，权重上稍微
+//    加一点 env 做补偿(把"高频存在感"换算成低频推力强度，而不是频率本身)。
+//  - 长音效：要连续的"滑"，包络(env)才该占大头、衰减要慢到能"跨过"音频里的瞬时安静间隙；
+//    但 attack 如果还是瞬时的，会追着音频里任何低频音调的每一个周期重新起震，反而变成
+//    更快的碎震——所以长音效这类也要把 attack 放慢，让包络真正是"包络"而不是整流后原样输出。
+struct HapticGains { float attack, decay, transientGain, envGain; };
+static HapticGains haptic_gains_for_idx(int idx) {
+    if (idx >= 665 && idx <= 700) return { 0.45f, 0.965f, 1.65f, 0.6f };  // 弹刀/格挡
+    if (idx == 408)               return { 0.45f, 0.965f, 1.65f, 0.6f };  // 危攻
+    if (idx >= 851 && idx <= 853) return { 0.45f, 0.965f, 1.65f, 0.6f };  // 处决/破防
+    if (idx >= 983 && idx <= 992) return { 0.45f, 0.965f, 1.65f, 0.6f };  // 受伤/死亡
+    if (idx >= 256 && idx <= 258) return { 0.45f, 0.965f, 1.65f, 0.6f };  // 闪避/布料
+    if (idx == 330 || idx == 331 || idx == 641) return { 0.45f, 0.965f, 1.65f, 0.6f }; // 不死斩
+    if (idx >= 401 && idx <= 402) return { 0.45f, 0.965f, 1.65f, 0.6f }; // 水月反击(识破)
+    // 其余(长音效/UI/坐佛/地名等)：慢起震+慢回落，包络当主角。
+    // 时间常数换算 tau_ms ≈ 1000/(a*48000)：0.08 之前算错了，实际只有 ~0.26ms(根本没变慢)；
+    // 现在 attack=0.0035 → ~6ms，decay=0.999653 → ~60ms，回落比上一版(40ms)更"滑"，
+    // 代价是同一段长音效里如果原本有两三次离散撞击，更容易被抹平成一整段分不清次数的嗡嗡。
+    return { 0.0035f, 0.999653f, 0.5f, 1.3f };
+}
 
 static unsigned haptic_max_frames_for_idx(int idx) {
     if (idx >= 665 && idx <= 700) return 48000 / 8;   // 125ms 弹刀/格挡：短促冲击
@@ -814,17 +945,111 @@ static unsigned haptic_max_frames_for_idx(int idx) {
     if (idx >= 983 && idx <= 992) return 48000 / 5;   // 200ms 受伤/死亡
     if (idx >= 256 && idx <= 258) return 48000 / 10;  // 100ms 闪避/布料
     if (idx == 330 || idx == 331 || idx == 641) return 48000 / 5;
-    return HAPTIC_FALLBACK_MAX_FRAMES;
+    if (idx >= 401 && idx <= 402) return 48000 / 8;    // 125ms 水月反击(识破)：短促冲击
+    if (idx >= 57 && idx <= 59)   return 48000 * 2;    // 2s 死字咚/死亡屏幕
+    if (idx == 353 || idx == 354) return 48000 * 2;    // 2s 濒死心跳
+    return HAPTIC_FALLBACK_MAX_FRAMES; // 1028-1030(首次坐佛)等未专门配置的事件都走这个 4s 兜底
 }
 
-static float shape_haptic_sample(float mono, DspContext& ctx) {
-    float hp = HAPTIC_HP_A * (ctx.hpPrevOut + mono - ctx.hpPrevIn);
+// 2026-07-14：弹刀/格挡叠加一层合成脉冲，真实音频驱动的整形照常跑，脉冲加在上面。
+// 原因：弹刀的"金属高频"感音圈本来就摸不到（带通滤到 300Hz 以下），从真实波形里想办法
+// "挤"出手感只会越挤越糊；但弹刀靠 idx(665-700) 是确定性识别出来的——不用管这次具体音频
+// 内容是什么，都能叠加一段设计好的固定脉冲垫底，保证下限手感稳定，同时真实音频那条路
+// 继续贡献本来就有的强弱/节奏差异（比如不同弹刀变体的细微区别）。
+// 这就是 Haptic Composer 的 transient 概念，但我们比它有优势：它靠统计检测猜"这可能是个瞬态"，
+// 我们直接确定"这就是弹刀"。
+//
+// 实现上踩过一次坑：最早是在 playSound_detour 命中弹刀那一刻，一次性把整段 50ms 脉冲塞进
+// 环形缓冲——结果彻底没声。原因是环形缓冲的消费端(haptic_pull_audio)有"只留最近~20-30ms
+// backlog，多了就跳过丢弃"的逻辑，是为真实音频"逐块持续写入"的模式设计的；一次性怼进去
+// 50ms 在它看来就是"积压的旧数据"，还没读到就被跳过丢弃了。
+// 现在改成让脉冲也走跟真实音频完全一样的逐块节奏——直接在 shape_haptic_sample 里叠加，
+// 节奏由 FMOD 混音线程通过 channel_tap_read 自然驱动，不会被判定成积压。
+static bool is_pulse_event(int idx) {
+    if (idx >= 665 && idx <= 700) return true; // 弹刀/格挡
+    // 2026-07-16 mark 打点四连确认(Δ172/328/422/141ms)：忍杀场景下 idx=851 每次都是真实音频
+    // 静音(peak=0.0000)——不是白名单漏了，是这个通道压根没内容可震。既然没有真实音频能整形，
+    // 直接叠加合成脉冲垫底（跟弹刀共用同一张固定波形表/makeup），保证至少有稳定的震感。
+    if (idx == 851) return true;
+    return false;
+}
+
+// 固定脉冲波形表：只在第一次用到时算一次（固定种子，不用atomic递增），存的是"带通后的原始
+// 形状"（不含包络/放大，那两步在使用时按 elapsedFrames 现算，方便以后单独调），覆盖弹刀的
+// 125ms 上限(haptic_max_frames_for_idx)，往后不会用到更远的下标。
+static const unsigned PULSE_TABLE_FRAMES = 48000 / 8; // 125ms
+static float* pulse_table() {
+    static float table[PULSE_TABLE_FRAMES] = {};
+    static std::once_flag once;
+    std::call_once(once, [] {
+        uint32_t seed = 0xABCD1234u; // 固定种子：每次进程启动生成的都是同一条波形
+        float hpPrevIn = 0.0f, hpPrevOut = 0.0f, bp = 0.0f;
+        for (unsigned i = 0; i < PULSE_TABLE_FRAMES; ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            float noise = (float)(int32_t)seed * (1.0f / 2147483648.0f);
+            float hpRaw = HAPTIC_HP_A * (hpPrevOut + noise - hpPrevIn);
+            hpPrevIn = noise; hpPrevOut = hpRaw;
+            bp += (hpRaw - bp) * HAPTIC_BP_LP_A;
+            table[i] = bp;
+        }
+    });
+    return table;
+}
+
+// 2026-07-16 诊断开关：DSX Discord 社区反馈"完全不处理的原始 PCM，没有台阶感"，强烈提示
+// "一下一下"大概率是我们自己加的带通+包络这道整形工序引入的，不是原始音频本身的问题。
+// 桌面放一个 haptic_raw_bypass.txt（内容随意，存在就算开）就能跳过带通+包络，直接把真实
+// 音频(简单限幅)送出去，测一下台阶感是不是真的消失——只在游戏启动时检查一次，改文件要重开
+// 游戏才生效（够用，这是一次性诊断，不是要做成常驻开关）。
+static bool raw_bypass_enabled() {
+    static bool enabled = [] {
+        char path[MAX_PATH] = ""; char* up = nullptr; size_t n = 0;
+        bool exists = false;
+        if (_dupenv_s(&up, &n, "USERPROFILE") == 0 && up) {
+            _snprintf_s(path, sizeof(path), _TRUNCATE, "%s\\Desktop\\haptic_raw_bypass.txt", up);
+            free(up);
+            exists = (GetFileAttributesA(path) != INVALID_FILE_ATTRIBUTES);
+        }
+        logf("RAWBYPASS: %s (%s)", exists ? "ON" : "off", path);
+        return exists;
+    }();
+    return enabled;
+}
+
+// elapsedFrames：这个 tap 从挂上到"当前这一个采样"一共走了多少帧，仅合成脉冲层用来算包络
+// （ctx.hapticFrames 只在每个音频块结束后才整体累加一次，块内单独传才能让脉冲包络逐样本
+// 平滑衰减，不会出现"一整块跳一下"的台阶感）。
+static float shape_haptic_sample(float mono, DspContext& ctx, unsigned elapsedFrames) {
+    if (raw_bypass_enabled() && !is_pulse_event(ctx.idx)) {
+        // 零处理诊断路径：只做限幅，不带通、不追包络，直接把捕获到的真实音频送出去。
+        float s = mono;
+        if (s > 1.0f) s = 1.0f;
+        if (s < -1.0f) s = -1.0f;
+        return s;
+    }
+    HapticGains g = haptic_gains_for_idx(ctx.idx);
+    float hpRaw = HAPTIC_HP_A * (ctx.hpPrevOut + mono - ctx.hpPrevIn);
     ctx.hpPrevIn = mono;
-    ctx.hpPrevOut = hp;
+    ctx.hpPrevOut = hpRaw;
+    ctx.bpPrev += (hpRaw - ctx.bpPrev) * HAPTIC_BP_LP_A; // 再过一级低通，hpRaw→带通
+    float hp = ctx.bpPrev;
     float absHp = hp < 0.0f ? -hp : hp;
-    if (absHp > ctx.env) ctx.env += (absHp - ctx.env) * HAPTIC_ENV_ATTACK;
-    else ctx.env *= HAPTIC_ENV_DECAY;
-    float shaped = hp * HAPTIC_TRANSIENT_GAIN + ctx.env * 0.35f;
+    if (absHp > ctx.env) ctx.env += (absHp - ctx.env) * g.attack;
+    else ctx.env *= g.decay;
+    float shaped = hp * g.transientGain + ctx.env * g.envGain;
+
+    if (is_pulse_event(ctx.idx)) {
+        // 叠加合成脉冲层：读同一张预先算好的固定波形表，不再现场生成随机噪声——
+        // 窄带噪声本身自带随机起伏(几个相近频率互相干涉)，每次现场生成会导致"有时候
+        // 像一下、有时候像两下"，跟"每次弹刀手感一致"这个初衷矛盾，改成只算一次、
+        // 以后都读同一张表，波形固定，手感稳定可重复。
+        unsigned tblIdx = elapsedFrames < PULSE_TABLE_FRAMES ? elapsedFrames : PULSE_TABLE_FRAMES - 1;
+        static const float PULSE_DECAY_TAU = 1900.0f; // 约 40ms 时间常数
+        static const float PULSE_MAKEUP = 600.0f;     // 250 在实战里还想再强，先翻倍多试试
+        float envelope = expf(-(float)elapsedFrames / PULSE_DECAY_TAU);
+        shaped += pulse_table()[tblIdx] * envelope * PULSE_MAKEUP;
+    }
+
     if (shaped > 1.0f) shaped = 1.0f;
     if (shaped < -1.0f) shaped = -1.0f;
     return shaped;
@@ -904,6 +1129,42 @@ static void close_channel_dump(ChannelDump* dump) {
     delete dump;
 }
 
+// 2026-07-15 诊断用：把"长音效"(非脉冲类)的 ctx.env 包络曲线本身导出成单声道 wav，
+// 用来确认包络是不是逐采样平滑变化的，还是哪个环节被"按块锁死"了(07-15 交接文档的诊断建议)。
+// 只锁定进程生命周期内第一个符合条件的 tap，抓完（该 tap 结束或抓满4秒）自动收尾关闭，
+// 不会跨 tap 拼接、也不会一直写。批量按块写入(不是逐采样写文件)，避免在混音线程上做
+// 高频小块磁盘 I/O 拖慢实时音频。
+static void* g_envDumpTargetDsp = nullptr;
+static ChannelDump* g_envDump = nullptr;
+static std::atomic<bool> g_envDumpDone{false};
+static std::mutex g_envDumpLock;
+
+static void env_dump_tick(void* dspInstance, int idx, const float* buf, unsigned count, bool final) {
+    if (is_pulse_event(idx)) return; // 只关心长音效那条整形路径，脉冲不是这次要查的问题
+    if (g_envDumpDone.load(std::memory_order_relaxed)) return;
+    std::lock_guard<std::mutex> lock(g_envDumpLock);
+    if (g_envDumpDone.load(std::memory_order_relaxed)) return;
+    if (!g_envDump) {
+        g_envDumpTargetDsp = dspInstance;
+        ensure_app_paths();
+        char path[MAX_PATH];
+        _snprintf_s(path, sizeof(path), _TRUNCATE, "%s\\env_dump.wav", g_appDir);
+        g_envDump = new ChannelDump{};
+        g_envDump->idx = idx;
+        g_envDump->channels = 1;
+        strncpy_s(g_envDump->path, sizeof(g_envDump->path), path, _TRUNCATE);
+        fopen_s(&g_envDump->file, path, "wb");
+        if (g_envDump->file) { wav_write_header(g_envDump->file, 1, 0); logf("ENVDUMP: open %s idx=%d", path, idx); }
+    }
+    if (dspInstance != g_envDumpTargetDsp) return; // 别的 tap，不是锁定的这个，忽略
+    if (count > 0 && g_envDump->file) write_channel_dump(g_envDump, buf, count, 1);
+    if (final || g_envDump->frames >= 48000 * 4) {
+        close_channel_dump(g_envDump);
+        g_envDump = nullptr;
+        g_envDumpDone.store(true, std::memory_order_relaxed);
+    }
+}
+
 static FMOD_RESULT channel_tap_release(FMOD_DSP_STATE_* state) {
     void* dsp = state ? state->instance : nullptr;
     logf("CHDSP: release dsp=%p", dsp);
@@ -931,7 +1192,7 @@ static FMOD_RESULT channel_tap_read(FMOD_DSP_STATE_* state, float* in, float* ou
     int ch = (outch > 0 && outch < inch) ? outch : inch;
     if (out && in) memcpy(out, in, (size_t)length * ch * sizeof(float));
     if (!in) return 0;
-    DspContext ctx{ nullptr, -1, 1.0f, false, false, 0, false, 0, 0, false, 0.0f, 0.0f, 0.0f };
+    DspContext ctx{ nullptr, -1, 1.0f, false, false, 0, false, 0, 0, false, 0.0f, 0.0f, 0.0f, 0, 0.0f };
     bool haveCtx = false;
     if (state) {
         std::lock_guard<std::mutex> lock(g_dumpLock);
@@ -943,7 +1204,8 @@ static FMOD_RESULT channel_tap_read(FMOD_DSP_STATE_* state, float* in, float* ou
     }
     if (state && state->plugindata) write_channel_dump((ChannelDump*)state->plugindata, in, length, inch);
     float peak = 0.0f;
-    if (ctx.haptic && !ctx.hapticDone) {
+    bool channelReused = ctx.channel && current_channel_gen(ctx.channel) != ctx.channelGen;
+    if (ctx.haptic && !ctx.hapticDone && !channelReused) {
         unsigned maxFrames = haptic_max_frames_for_idx(ctx.idx);
         unsigned remaining = ctx.hapticFrames < maxFrames ? maxFrames - ctx.hapticFrames : 0;
         unsigned frames = length < remaining ? length : remaining;
@@ -973,21 +1235,26 @@ static FMOD_RESULT channel_tap_read(FMOD_DSP_STATE_* state, float* in, float* ou
             float maxWeight = leftWeight > rightWeight ? leftWeight : rightWeight;
             if (maxWeight > 1.0f) { leftWeight /= maxWeight; rightWeight /= maxWeight; }
             static thread_local float shaped[4096];
+            static thread_local float envBuf[4096]; // 诊断用：跟 shaped[] 同步记录 ctx.env，批量导出成 wav
             unsigned offset = 0;
             for (unsigned int i = 0; i < frames; ++i) {
                 float s = 0.0f;
                 for (int c = 0; c < inch; ++c) s += in[i * inch + c];
                 if (inch > 1) s /= inch;
-                shaped[offset++] = shape_haptic_sample(s, ctx);
+                shaped[offset] = shape_haptic_sample(s, ctx, ctx.hapticFrames + i);
+                envBuf[offset] = ctx.env;
+                ++offset;
                 if (offset == (unsigned)(sizeof(shaped) / sizeof(shaped[0]))) {
                     float p = push_mono_to_ring(shaped, offset, true, ctx.gain, &ctx.mixCursor, &ctx.mixStarted, leftWeight, rightWeight);
                     if (p > peak) peak = p;
+                    env_dump_tick(state ? state->instance : nullptr, ctx.idx, envBuf, offset, false);
                     offset = 0;
                 }
             }
             if (offset > 0) {
                 float p = push_mono_to_ring(shaped, offset, true, ctx.gain, &ctx.mixCursor, &ctx.mixStarted, leftWeight, rightWeight);
                 if (p > peak) peak = p;
+                env_dump_tick(state ? state->instance : nullptr, ctx.idx, envBuf, offset, false);
             }
             ctx.hapticFrames += frames;
             if (blockPeak < HAPTIC_QUIET_PEAK) ctx.quietFrames += frames;
@@ -996,6 +1263,7 @@ static FMOD_RESULT channel_tap_read(FMOD_DSP_STATE_* state, float* in, float* ou
         if (remaining == 0 || frames < length || ctx.quietFrames >= HAPTIC_QUIET_FRAMES) {
             ctx.hapticDone = true;
             ctx.haptic = false;
+            env_dump_tick(state ? state->instance : nullptr, ctx.idx, nullptr, 0, true); // 这个 tap 结束了，诊断录音收尾
             logf("CHDSP: haptic stop idx=%d frames=%u quiet=%u peak=%.4f", ctx.idx, ctx.hapticFrames, ctx.quietFrames, blockPeak);
         }
         if (state && haveCtx) {
@@ -1011,8 +1279,17 @@ static FMOD_RESULT channel_tap_read(FMOD_DSP_STATE_* state, float* in, float* ou
                 it->second.hpPrevIn = ctx.hpPrevIn;
                 it->second.hpPrevOut = ctx.hpPrevOut;
                 it->second.env = ctx.env;
+                it->second.bpPrev = ctx.bpPrev;
             }
         }
+    } else if (channelReused && ctx.haptic && !ctx.hapticDone && state && haveCtx) {
+        // channel 已经被派去播别的声音了（换编号），立刻停止喂环形缓冲，不等定时器/静音检测。
+        // 只是不再往下游写数据，不碰 DSP 节点本身——节点还挂在 channel 上，等 FMOD 自己在
+        // 这个 channel 真正播完时通过 release 回调清理，跟"主动摘除"是两回事。
+        logf("CHDSP: haptic stop idx=%d reason=channel_reused frames=%u", ctx.idx, ctx.hapticFrames);
+        std::lock_guard<std::mutex> lock(g_dumpLock);
+        auto it = g_dspContext.find(state->instance);
+        if (it != g_dspContext.end()) { it->second.hapticDone = true; it->second.haptic = false; }
     }
     static std::atomic<int> pc{0}; static float pmax = 0;
     if (peak > pmax) pmax = peak;
@@ -1020,7 +1297,7 @@ static FMOD_RESULT channel_tap_read(FMOD_DSP_STATE_* state, float* in, float* ou
     return 0;
 }
 
-static bool attach_channel_tap(void* system, void* channel, int subIdx, float gain, bool dump, bool haptic) {
+static bool attach_channel_tap(void* system, void* channel, int subIdx, float gain, bool dump, bool haptic, unsigned long long gen) {
     if (!system || !channel || !g_createDSP || !g_chAddDSP) return false;
     FMOD_DSP_DESCRIPTION_ d{};
     d.name[0] = 'c'; d.name[1] = 'h'; d.name[2] = 't'; d.name[3] = 'a'; d.name[4] = 'p'; d.name[5] = 0;
@@ -1030,7 +1307,7 @@ static bool attach_channel_tap(void* system, void* channel, int subIdx, float ga
     if (cr != 0 || !dsp) { logf("CHDSP: CreateDSP failed r=%d channel=%p idx=%d", cr, channel, subIdx); return false; }
     {
         std::lock_guard<std::mutex> lock(g_dumpLock);
-        g_dspContext[dsp] = DspContext{ channel, subIdx, gain, dump, haptic, 0, false, 0, 0, false, 0.0f, 0.0f, 0.0f };
+        g_dspContext[dsp] = DspContext{ channel, subIdx, gain, dump, haptic, 0, false, 0, 0, false, 0.0f, 0.0f, 0.0f, gen, 0.0f };
     }
     void* conn = nullptr;
     FMOD_RESULT ar = g_chAddDSP(channel, dsp, &conn);
@@ -1179,13 +1456,18 @@ extern "C" FMOD_RESULT playSound_detour(void* self, int channelid, void* sound, 
     bool shouldHaptic = haptic.enabled;
     int playPaused = shouldHaptic ? 1 : paused;
     FMOD_RESULT r = g_playSound(self, channelid, sound, playPaused, channel);
+    // 换音代数：不管这次播的声音在不在白名单里，只要成功拿到 channel 就+1。
+    // 这样别的 idx 借用同一个 channel 播放时，正在挂着的老 tap 能立刻发现"channel 已经不是我的了"。
+    unsigned long long gen = (r == 0 && channel && *channel) ? bump_channel_gen(*channel) : 0;
 
     record_seen_effect(subIdx, bank, subname, verdict, shouldHaptic, haptic.gain);
     logf("PLAY  ch=%d sound=%p bank=%s sub=\"%s\" -> %s  idx=%d gain=%.2f dump=%d (%s)",
          channelid, sound, bank.c_str(), subname, verdict, subIdx, haptic.gain, haptic.dump ? 1 : 0, subIdx >= 0 ? sound_meaning(subIdx) : "-");
     if (haptic.attach) {
         if (shouldHaptic) ensure_haptic();
-        bool tapped = (r == 0 && channel && *channel) ? attach_channel_tap(self, *channel, subIdx, haptic.gain, haptic.dump, shouldHaptic) : false;
+        // 合成脉冲现在叠加在 shape_haptic_sample 内部（is_pulse_event 判断），tap 正常挂、
+        // 正常用真实音频驱动，不需要在这里特殊分支——两条路本来就是一起走同一个 tap。
+        bool tapped = (r == 0 && channel && *channel) ? attach_channel_tap(self, *channel, subIdx, haptic.gain, haptic.dump, shouldHaptic, gen) : false;
         if (g_chSetPaused && channel && *channel)
             g_chSetPaused(*channel, paused ? 1 : 0);
         if (shouldHaptic && !tapped) {
@@ -1231,6 +1513,8 @@ static void do_init() {
     }
     g_log = nullptr;
     g_log = _fsopen(path, "w", _SH_DENYWR);   // 共享读：DLL 写时外部进程仍可读日志(否则被独占锁死)
+    g_startTick = GetTickCount64();
+    CreateThread(nullptr, 0, mark_key_thread, nullptr, 0, nullptr);   // F8 按键打点
 
     g_orig = LoadLibraryA("fmodex64_orig.dll");
     if (!g_orig) { logf("FATAL: cannot load fmodex64_orig.dll (err=%lu)", GetLastError()); return; }

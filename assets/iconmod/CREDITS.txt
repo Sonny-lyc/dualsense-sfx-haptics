@@ -1,0 +1,20 @@
+This folder bundles two third-party components, mirrored here with permission per
+their published licenses (see PROJECT_CHANGES.md / README "Third-Party" section
+for the original research):
+
+1. Mod Engine (loader)
+   Author: Katalash
+   Source: https://www.nexusmods.com/sekiro/mods/6
+   License note: "You are free to distribute and UNMODIFIED ModEngine WITH a mod"
+   dinput8.dll is redistributed unmodified.
+
+2. PS5 Glyphs (button-prompt texture swap)
+   Source: https://www.nexusmods.com/sekiro/mods/2113
+   License note: Permissions explicitly allow re-upload / repackaging into other
+   projects with attribution; not for paid/commercial redistribution.
+   mods/menu/hi/01_common.tpf.dcx is redistributed unmodified.
+
+Neither component is required for the haptics feature to work. Installing them only
+swaps Sekiro's on-screen button-prompt icons from Xbox to PS5 style (static texture
+replacement — Steam Input hides real controller identity from the game, so this is
+not "detection", it always shows PS5-style icons regardless of what's plugged in).

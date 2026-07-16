@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>DualSenseSfxHaptics</AssemblyName>
     <Product>DualSense 音效触觉</Product>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
@@ -23,9 +23,22 @@
     </Content>
   </ItemGroup>
 
-  <!-- PublishSingleFile 会丢 Content,故 publish 后显式拷贝代理 DLL 到 proxy\ -->
+  <!-- 打包 PS5 按键图标模组(Mod Engine + PS5 Glyphs，第三方，见 assets/iconmod/CREDITS.txt) -->
+  <ItemGroup>
+    <Content Include="..\..\assets\iconmod\**\*" Link="iconmod\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- PublishSingleFile 会丢 Content,故 publish 后显式拷贝代理 DLL / 图标模组素材 -->
   <Target Name="CopyProxyOnPublish" AfterTargets="Publish" Condition="Exists('..\..\build\Release\fmodex64.dll')">
     <Copy SourceFiles="..\..\build\Release\fmodex64.dll" DestinationFolder="$(PublishDir)proxy" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyIconModOnPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <IconModFiles Include="..\..\assets\iconmod\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(IconModFiles)" DestinationFolder="$(PublishDir)iconmod\%(RecursiveDir)" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>
