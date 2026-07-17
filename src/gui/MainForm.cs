@@ -55,14 +55,14 @@ public class MainForm : Form
     static readonly Dictionary<string, string> Dict = new() {
         ["DualSense 音效触觉  v0.2"] = "DualSense SFX Haptics  v0.2",
         ["DualSense 音效触觉"] = "DualSense SFX Haptics",
-        ["只把《只狼》的音效变成手柄细腻触觉（音乐/语音不震）"] = "Turns Sekiro's SFX into fine DualSense haptics (music/voice stay silent)",
+        ["只把《只狼》的音效变成手柄细腻触觉（音乐/语音不震）"] = "Sekiro SFX -> fine DualSense haptics (no music/voice)",
         ["游戏目录（只狼 Sekiro）"] = "Game folder (Sekiro)",
         ["浏览…"] = "Browse…",
         ["自动检测"] = "Auto-detect",
         ["状态"] = "Status",
         ["安装到游戏"] = "Install to game",
         ["卸载 / 还原"] = "Uninstall / restore",
-        ["PS5 按键图标（可选，第三方：Mod Engine + PS5 Glyphs，见 iconmod\\CREDITS.txt）"] = "PS5 button icons (optional, 3rd-party: Mod Engine + PS5 Glyphs, see iconmod\\CREDITS.txt)",
+        ["PS5 按键图标（可选，第三方：Mod Engine + PS5 Glyphs，见 iconmod\\CREDITS.txt）"] = "PS5 button icons (optional, 3rd-party, see iconmod\\CREDITS.txt)",
         ["安装图标模组"] = "Install icon mod",
         ["卸载图标模组"] = "Uninstall icon mod",
 
@@ -139,6 +139,11 @@ public class MainForm : Form
 
         BuildUi();
 
+        // 确保初始语言状态（标题栏、语言按钮文字）跟 _english 的初始值保持一致，
+        // 不用等用户真正点一次切换按钮才同步。
+        Text = Tr("DualSense 音效触觉  v0.2");
+        btnLang.Text = _english ? "中文" : "EN";
+
         txtGamePath.Text = LoadGamePath() ?? AutoDetectGame() ?? "";
         EnsureDefaultHapticsConfig();
 
@@ -154,7 +159,7 @@ public class MainForm : Form
         int x = 20, w = ClientSize.Width - 40, y = 16;
 
         // ---- 语言切换按钮（右上角） ----
-        btnLang = MakeButton("EN", ClientSize.Width - 66, 16, 46, 26);
+        btnLang = MakeButton("EN", ClientSize.Width - 90, 16, 70, 26);
         btnLang.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         btnLang.Click += (s, e) => ToggleLanguage();
         Controls.Add(btnLang);
@@ -182,10 +187,10 @@ public class MainForm : Form
             ReadOnly = true, Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
         };
         gp.Controls.Add(txtGamePath);
-        var btnBrowse = Reg(MakeButton("浏览…", 14, 60, 90), "浏览…");
+        var btnBrowse = Reg(MakeButton("浏览…", 14, 60, 110), "浏览…");
         btnBrowse.Click += (s, e) => BrowseGame();
         gp.Controls.Add(btnBrowse);
-        var btnAuto = Reg(MakeButton("自动检测", 112, 60, 90), "自动检测");
+        var btnAuto = Reg(MakeButton("自动检测", 132, 60, 170), "自动检测");
         btnAuto.Click += (s, e) => { var g = AutoDetectGame(); if (g != null) { txtGamePath.Text = g; SaveGamePath(g); RefreshStatus(); } else Msg(Tr("没自动找到只狼，请点\"浏览\"手动选游戏目录"), BAD); };
         gp.Controls.Add(btnAuto);
         y += 104;
